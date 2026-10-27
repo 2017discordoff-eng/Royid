@@ -598,6 +598,100 @@ document.querySelectorAll('.q button').forEach(function(b){
   inp.addEventListener('input',function(){clear();l.classList.add('on');l.style.setProperty('--c',inp.value);root.style.setProperty('--blue',inp.value)});
   l.appendChild(inp);box.appendChild(l);
 })();
+
+/* ---- Royid downloads: direct file download from the GitHub release, page does not change ---- */
+(function(){
+  var REPO='2017discordoff-eng/Royid', TAG='v0.2.13', VER=TAG.replace(/^v/,'');
+  var BASE='https://github.com/'+REPO+'/releases/download/'+TAG+'/';
+  // names produced by the build config; replaced by the real asset names when GitHub answers
+  var files={
+    win:'Royid-Setup-'+VER+'.exe',
+    appimage:'Royid-'+VER+'.AppImage',
+    deb:'liner_'+VER+'_amd64.deb',
+    dmgarm:'Royid-'+VER+'-arm64.dmg',
+    dmgx64:'Royid-'+VER+'-x64.dmg'
+  };
+  var optional={winzip:true};
+  function apply(){
+    document.querySelectorAll('[data-asset]').forEach(function(a){
+      var f=files[a.getAttribute('data-asset')];
+      if(!f)return;
+      a.setAttribute('href',BASE+encodeURIComponent(f));
+      a.setAttribute('download',f);
+      a.removeAttribute('target');
+      if(optional[a.getAttribute('data-asset')])a.style.display='';
+    });
+    var main=document.getElementById('dlMain');
+    if(!main)return;
+    var ua=(navigator.userAgent||'')+' '+(navigator.platform||'');
+    var key='win',label='Download for Windows';
+    if(/Mac/i.test(ua)&&!/iPhone|iPad/i.test(ua)){key='dmgarm';label='Download for macOS';}
+    else if(/Linux|X11/i.test(ua)&&!/Android/i.test(ua)){key='appimage';label='Download for Linux';}
+    main.setAttribute('href',BASE+encodeURIComponent(files[key]));
+    main.setAttribute('download',files[key]);
+    var l=document.getElementById('dlLabel');if(l)l.textContent=label;
+    var ico=document.querySelector('.os-ico[data-ico="'+(key==='win'?'win':key==='appimage'?'linux':'mac')+'"]');
+    var di=document.getElementById('dlIcon');
+    if(ico&&di)di.innerHTML=ico.innerHTML;
+  }
+  apply();
+  // ask GitHub for the real file names so a different naming still works
+  try{
+    fetch('https://api.github.com/repos/'+REPO+'/releases/tags/'+TAG,{headers:{Accept:'application/vnd.github+json'}})
+      .then(function(r){return r.ok?r.json():null})
+      .then(function(rel){
+        if(!rel||!rel.assets)return;
+        var names=rel.assets.map(function(a){return a.name}).filter(function(n){return !/\.(blockmap|yml|yaml|sha256|sig|txt)$/i.test(n)});
+        window.__royidAssets=names;
+        var pick=function(re,not){return names.filter(function(n){return re.test(n)&&!(not&&not.test(n))})[0]};
+        var m={
+          win:pick(/\.exe$/i),
+          winzip:pick(/(win|portable).*\.zip$/i),
+          appimage:pick(/\.appimage$/i),
+          deb:pick(/\.deb$/i),
+          dmgarm:pick(/arm64.*\.dmg$/i),
+          dmgx64:pick(/\.dmg$/i,/arm64/i)
+        };
+        Object.keys(m).forEach(function(k){if(m[k])files[k]=m[k]});
+        // keep optional buttons hidden when the release has no such file
+        if(!m.winzip)optional.winzip=false;
+        if(!m.deb){} 
+        apply();
+        if(!m.winzip){var z=document.querySelector('[data-asset="winzip"]');if(z)z.style.display='none';}
+      }).catch(function(){});
+  }catch(e){}
+})();
+
+/* ---- start the download in a hidden frame so the page never navigates ---- */
+(function(){
+  var frame=null,timer=null;
+  function note(msg){var n=document.getElementById('dlNote');if(n){n.textContent=msg;}}
+  function startDownload(url){
+    if(frame){frame.remove();frame=null;}
+    frame=document.createElement('iframe');
+    frame.style.cssText='position:absolute;width:0;height:0;border:0;visibility:hidden';
+    frame.setAttribute('aria-hidden','true');
+    frame.src=url;
+    document.body.appendChild(frame);
+    clearTimeout(timer);
+    timer=setTimeout(function(){if(frame){frame.remove();frame=null;}},120000);
+  }
+  document.addEventListener('click',function(e){
+    var a=e.target.closest&&e.target.closest('a[data-asset],#dlMain');
+    if(!a)return;
+    var href=a.getAttribute('href')||'';
+    if(href.charAt(0)==='#')return;
+    e.preventDefault();
+    var name=decodeURIComponent(href.split('/').pop());
+    var known=window.__royidAssets;
+    if(known&&known.length&&known.indexOf(name)===-1){
+      note('File not found on the release: '+name);
+      return;
+    }
+    note('Download started. Free. No ads, no account, no telemetry.');
+    startDownload(href);
+  });
+})();
 </script>
 
 </body></html>
